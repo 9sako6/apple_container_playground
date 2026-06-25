@@ -1,0 +1,13 @@
+{
+  "name": "apple_container_playground",
+  "dockerComposeFile": "compose.yaml",
+  "service": "apple_container_playground",
+  "workspaceFolder": "/workspace",
+  "forwardPorts": [3000],
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "extensions": []
+    }
+  }
+}

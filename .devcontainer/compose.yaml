@@ -1,0 +1,15 @@
+name: apple_container_playground
+
+services:
+  apple_container_playground:
+    image: apple_container_playground-devcontainer
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    environment:
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ..:/workspace:cached
+    command: bun run dev

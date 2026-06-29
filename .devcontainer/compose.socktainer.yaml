@@ -1,0 +1,16 @@
+name: apple_container_playground
+
+services:
+  apple_container_playground:
+    container_name: acp-dev
+    image: apple_container_playground-devcontainer
+    environment:
+      PORT: "3000"
+    volumes:
+      - ..:/workspace:cached
+    command: bun run dev
+
+networks:
+  default:
+    name: default
+    external: true

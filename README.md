@@ -39,6 +39,27 @@ DOCKER_HOST="unix://$HOME/.socktainer/container.sock" \
 
 socktainer 用の Compose file は `.devcontainer/compose.socktainer.yaml`。Dev Container CLI の build 経路が Docker Compose v5 / buildx 経由で止まるため、image は先に `container build` で作る。
 
+Dev Container CLI をもう少し通すための最小 proxy は `tools/socktainer-docker-proxy.js`。
+
+```sh
+devcontainer up \
+  --workspace-folder . \
+  --config .devcontainer/socktainer/devcontainer.json \
+  --docker-path "$PWD/tools/socktainer-docker-proxy.js" \
+  --remove-existing-container
+```
+
+この proxy は基本的に Docker CLI を socktainer socket に向けるだけで、補正は2つに絞っている。
+
+- `docker events --filter event=start` が Dev Container CLI の期待どおりに返らないため、`acp-dev` が running になったら start event を1行だけ合成する
+- socktainer v1.0.0 は `docker exec -i ...` で出力が消えたり daemon が落ちたりするため、最終コマンドの `exec -i` から `-i` を外す
+
+`userEnvProbe` は socktainer 用 config で `none` にしている。これで `devcontainer up` は通る。ただし `devcontainer exec` は Dev Container CLI が interactive shell server を開くため、まだ安定して完了しない。現時点でテスト実行まで通すなら、`devcontainer up` 後に次を使う。
+
+```sh
+"$PWD/tools/socktainer-docker-proxy.js" exec -i acp-dev bun test
+```
+
 ## 実行
 
 ```sh

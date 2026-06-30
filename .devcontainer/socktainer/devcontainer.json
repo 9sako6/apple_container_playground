@@ -3,6 +3,7 @@
   "dockerComposeFile": "../compose.socktainer.yaml",
   "service": "apple_container_playground",
   "workspaceFolder": "/workspace",
+  "userEnvProbe": "none",
   "forwardPorts": [3000],
   "shutdownAction": "stopCompose",
   "customizations": {

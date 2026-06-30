@@ -225,6 +225,70 @@ DOCKER_HOST="unix://$HOME/.socktainer/container.sock" \
 
 一方で、直接の `docker exec acp-dev bun test` は成功する。したがって、現時点で確認できた実用経路は「socktainer + Docker Compose + Docker exec」であり、「socktainer + Dev Container CLI」はまだ完遂していない。
 
+### 最小 monkey patch
+
+Dev Container CLI が socktainer v1.0.0 と噛み合わない箇所をログで確認するため、`tools/socktainer-docker-proxy.js` を追加した。これは Docker API を再実装しない。基本は `/usr/local/bin/docker` へ委譲し、`DOCKER_HOST` を socktainer の Unix socket に向けるだけ。
+
+補正は2つだけ。
+
+1. `docker events --format "{{json .}}" --filter event=start`
+
+   Dev Container CLI は `compose up -d` の前に start event stream を開き、対象コンテナの start event を待つ。socktainer では `acp-dev` が running になっても Dev Container CLI が期待する event として届かず、`devcontainer up` が戻らなかった。
+
+   proxy はこの events 呼び出しだけを横取りし、`acp-dev` が running になるまで `docker inspect --type container acp-dev` を polling する。running になったら Docker events 互換の JSON を1行出し、そのまま stream として生かす。
+
+2. `docker exec -i ...`
+
+   socktainer v1.0.0 では `docker exec -i acp-dev bun test` が exit 0 でも stdout を返さず、その後 daemon が落ちることがあった。一方で `docker exec acp-dev bun test` は stdout 付きで成功した。
+
+   proxy は non-shell の `docker exec -i` から `-i` を外す。ただし Dev Container CLI が使う shell server 形式の `docker exec -i ... acp-dev /bin/sh` はそのままにしている。
+
+socktainer 用 config には `userEnvProbe: "none"` を入れた。これで `devcontainer up` は成功する。
+
+```sh
+devcontainer up \
+  --workspace-folder . \
+  --config .devcontainer/socktainer/devcontainer.json \
+  --docker-path "$PWD/tools/socktainer-docker-proxy.js" \
+  --remove-existing-container
+```
+
+確認結果:
+
+```text
+{"outcome":"success","containerId":"acp-dev","composeProjectName":"apple_container_playground","remoteUser":"root","remoteWorkspaceFolder":"/workspace"}
+```
+
+ただし `devcontainer exec` はまだ完遂しない。`userEnvProbe: "none"` 後も、Dev Container CLI は exec 時に `docker exec -i ... acp-dev /bin/sh` で interactive shell server を開く。この shell server が socktainer 上で戻らない。
+
+ここを proxy 側で偽装し始めると、Dev Container CLI の shell server protocol を実装することになる。これは「最小 monkey patch」を超えて自前互換レイヤに戻るので、ここではやらない。
+
+現時点でテストまで通る最小経路は次。
+
+```sh
+devcontainer up \
+  --workspace-folder . \
+  --config .devcontainer/socktainer/devcontainer.json \
+  --docker-path "$PWD/tools/socktainer-docker-proxy.js" \
+  --remove-existing-container
+
+"$PWD/tools/socktainer-docker-proxy.js" exec -i acp-dev bun test
+```
+
+確認結果:
+
+```text
+bun test v1.3.12 (700fc117)
+
+test/server.test.ts:
+(pass) devcontainer sample server > serves the root endpoint
+(pass) devcontainer sample server > serves a health check
+
+ 2 pass
+ 0 fail
+ 5 expect() calls
+```
+
 ### 判断
 
 自前 shim より socktainer 経由を優先したい理由は明確:
